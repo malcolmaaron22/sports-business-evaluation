@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sports Hall — Business Evaluation Dashboard</title>
+<!-- Libraries are vendored locally (vendor/) so the dashboard works fully offline. -->
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
+<script src="vendor/babel.min.js"></script>
+<!-- Optional: export to JPG / PDF. If these fail to load, export falls back to the print dialog. -->
+<script src="vendor/html2canvas.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419;
+    --panel:#171d26;
+    --panel-2:#1d2530;
+    --line:#2a3340;
+    --line-soft:#222b36;
+    --text:#e6edf3;
+    --text-dim:#9aa7b5;
+    --text-faint:#6b7785;
+    --accent:#4c9aff;
+    --accent-dim:#2d5a99;
+    --futsal:#4c9aff;
+    --pick:#2bb6a3;
+    --green:#3fb950;
+    --green-bg:#0f2916;
+    --red:#f85149;
+    --red-bg:#2a1213;
+    --amber:#d2a132;
+    --amber-bg:#2a2110;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code','Consolas',monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.45}
+  button{font-family:inherit}
+  input,select{font-family:inherit}
+  a{color:var(--accent)}
+
+  .wrap{max-width:1500px;margin:0 auto;padding:18px 20px 60px}
+
+  header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:18px}
+  header.top h1{margin:0;font-size:20px;font-weight:650;letter-spacing:-0.01em}
+  header.top .sub{color:var(--text-dim);font-size:12.5px;margin-top:3px;max-width:560px}
+
+  .period{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .period .field{display:flex;flex-direction:column;gap:4px}
+  .period label{font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em}
+  .period select,.period input{background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:8px 10px;border-radius:6px;font-size:14px;min-width:90px}
+  .period .cal-note{font-size:12px;color:var(--text-dim);align-self:center;padding-bottom:8px}
+  .period .cal-note b{color:var(--text)}
+
+  .btn{background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);
+    padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12.5px}
+  .btn:hover{border-color:var(--accent-dim);color:var(--text)}
+  .btn.danger:hover{border-color:var(--red);color:var(--red)}
+
+  .exportbar{display:flex;gap:8px;align-items:center}
+  .exportbar .ebtn{background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .exportbar .ebtn:hover{border-color:var(--accent);color:#fff;background:var(--accent-dim)}
+  .exportbar .ebtn:disabled{opacity:.55;cursor:default;border-color:var(--line);background:var(--panel-2);color:var(--text-dim)}
+  .exportbar .estatus{font-size:11.5px;color:var(--text-faint)}
+
+  .columns{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:16px;align-items:start}
+  @media(max-width:1180px){.columns{grid-template-columns:1fr}}
+
+  .col{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .card > .card-head{padding:12px 14px;border-bottom:1px solid var(--line-soft);display:flex;
+    align-items:center;justify-content:space-between;gap:8px}
+  .card > .card-head h2{margin:0;font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:var(--text)}
+  .card > .card-head .hint{font-size:11px;color:var(--text-faint)}
+  .card-body{padding:12px 14px}
+
+  .col-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);
+    padding:0 2px 2px}
+
+  /* item lists */
+  .item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line-soft)}
+  .item:last-child{border-bottom:none}
+  .item input.name{flex:1;min-width:0;background:transparent;border:1px solid transparent;border-radius:5px;
+    color:var(--text);padding:5px 6px;font-size:13px}
+  .item input.name:hover{border-color:var(--line)}
+  .item input.name:focus{border-color:var(--accent-dim);outline:none;background:var(--panel-2)}
+  .num{background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:5px;
+    padding:5px 7px;font-size:13px;font-family:var(--mono);text-align:right;width:84px}
+  .num:focus{outline:none;border-color:var(--accent)}
+  .num.small{width:62px}
+  .item .unit{font-size:11px;color:var(--text-faint);width:42px}
+  .item select.style{background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);
+    border-radius:5px;padding:4px 4px;font-size:11px}
+  .x{background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:15px;
+    padding:2px 6px;border-radius:5px;line-height:1}
+  .x:hover{color:var(--red);background:var(--red-bg)}
+  .additem{margin-top:8px}
+  .additem button{width:100%;background:var(--panel-2);border:1px dashed var(--line);color:var(--text-dim);
+    padding:7px;border-radius:6px;cursor:pointer;font-size:12.5px}
+  .additem button:hover{border-color:var(--accent-dim);color:var(--text)}
+
+  .subtotal{display:flex;justify-content:space-between;align-items:baseline;padding:9px 2px 2px;
+    margin-top:6px;font-size:13px;color:var(--text-dim)}
+  .subtotal .v{font-family:var(--mono);color:var(--text)}
+
+  /* totals */
+  .total-row{display:flex;justify-content:space-between;align-items:baseline;padding:11px 12px;
+    margin-top:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px}
+  .total-row .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);font-weight:650}
+  .total-row .val{font-family:var(--mono);font-size:18px;font-weight:650}
+
+  /* expandable */
+  .exp{margin-top:8px}
+  .exp-toggle{display:flex;width:100%;align-items:center;gap:7px;background:transparent;border:none;
+    color:var(--accent);cursor:pointer;font-size:12px;padding:4px 2px;text-align:left}
+  .exp-toggle:hover{color:#7fb6ff}
+  .exp-caret{font-size:9px;width:10px;color:var(--text-faint)}
+  .exp-toggle .lab{font-weight:600}
+  .exp-toggle .sum{margin-left:auto;font-family:var(--mono);color:var(--text-dim);font-weight:500}
+  .exp-body{border-left:2px solid var(--line);margin:4px 0 4px 6px;padding:6px 0 6px 12px}
+
+  /* math tables */
+  table.math{width:100%;border-collapse:collapse;font-size:11.5px;font-family:var(--mono)}
+  table.math th{text-align:right;font-weight:600;color:var(--text-faint);padding:3px 6px;
+    border-bottom:1px solid var(--line);font-family:var(--sans);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em}
+  table.math th:first-child{text-align:left}
+  table.math td{padding:3px 6px;border-bottom:1px solid var(--line-soft);text-align:right;color:var(--text-dim);white-space:nowrap}
+  table.math td:first-child{text-align:left;color:var(--text);font-family:var(--sans);white-space:normal}
+  table.math td.v{color:var(--text)}
+  table.math tr.tot td{border-top:1px solid var(--line);border-bottom:none;color:var(--text);font-weight:600;padding-top:5px}
+  .formula{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);background:var(--panel-2);
+    border:1px solid var(--line-soft);border-radius:6px;padding:8px 10px;margin:6px 0;line-height:1.7;white-space:pre-wrap}
+  .formula .hl{color:var(--text)}
+  .formula .g{color:var(--green)}
+  .formula .r{color:var(--red)}
+
+  /* price grid */
+  .pg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:1180px){.pg{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.pg{grid-template-columns:1fr}}
+  .pg-court{border:1px solid var(--line-soft);border-radius:8px;padding:10px}
+  .pg-court h3{margin:0 0 8px;font-size:12.5px;font-weight:650;display:flex;justify-content:space-between;align-items:center}
+  .pg-court h3 .courts{font-size:11px;color:var(--text-faint);font-weight:500}
+  .pg-cell{padding:7px 0;border-top:1px solid var(--line-soft)}
+  .pg-cell:first-of-type{border-top:none}
+  .pg-cell .cl{font-size:11.5px;color:var(--text-dim);margin-bottom:4px}
+  .pg-cell .row{display:flex;align-items:center;gap:8px}
+  .pg-cell .row .pfx{font-size:11px;color:var(--text-faint)}
+  .pg-cell .booked{margin-top:4px;font-size:10.5px;color:var(--text-faint);font-family:var(--mono)}
+  .pg-cell .booked b{color:var(--accent)}
+
+  /* utilization */
+  .util-modes{display:flex;gap:6px;margin-bottom:4px}
+  .util-modes button{flex:1;padding:7px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--text-dim);cursor:pointer;font-size:12.5px}
+  .util-modes button.active{background:var(--accent-dim);border-color:var(--accent);color:#fff}
+  .ceiling-note{font-size:11px;color:var(--amber);background:var(--amber-bg);border:1px solid #4a3a14;
+    border-radius:6px;padding:7px 9px;margin:8px 0}
+  .band{padding:9px 0;border-bottom:1px solid var(--line-soft)}
+  .band:last-child{border-bottom:none}
+  .band .bhead{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .band .bhead .bname{font-size:12.5px;font-weight:600}
+  .band .bhead .bpct{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--text)}
+  .slider-row{display:flex;align-items:center;gap:10px}
+  input[type=range]{flex:1;accent-color:var(--accent);height:4px}
+  .band .bimpact{font-size:10.5px;color:var(--text-faint);font-family:var(--mono);margin-top:4px}
+  .band .bimpact b{color:var(--text-dim)}
+  .ovr-toggle{background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;padding:4px 0 0;margin-top:2px}
+  .ovr-toggle:hover{color:#7fb6ff}
+  .ovr{margin-top:6px;padding-left:10px;border-left:2px solid var(--line)}
+  .ovr .sub-band{display:flex;align-items:center;gap:8px;margin:4px 0}
+  .ovr .sub-band .sn{font-size:11px;color:var(--text-dim);width:78px}
+  .ovr .sub-band .sv{font-family:var(--mono);font-size:12px;width:42px;text-align:right}
+
+  /* profit */
+  .status{border-radius:10px;padding:16px;text-align:center;border:1px solid var(--line)}
+  .status.profit{background:var(--green-bg);border-color:#1c5128}
+  .status.loss{background:var(--red-bg);border-color:#5c1f1f}
+  .status.breakeven{background:var(--amber-bg);border-color:#4a3a14}
+  .status .stag{font-size:12px;text-transform:uppercase;letter-spacing:.1em;font-weight:700;display:flex;
+    align-items:center;justify-content:center;gap:8px}
+  .status.profit .stag{color:var(--green)}
+  .status.loss .stag{color:var(--red)}
+  .status.breakeven .stag{color:var(--amber)}
+  .status .fig{font-family:var(--mono);font-size:34px;font-weight:700;margin-top:6px;letter-spacing:-0.01em}
+  .status.profit .fig{color:var(--green)}
+  .status.loss .fig{color:var(--red)}
+  .status.breakeven .fig{color:var(--amber)}
+  .status .per{font-size:11px;color:var(--text-dim);margin-top:2px}
+
+  .be-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .be-box{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:11px}
+  .be-box .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint)}
+  .be-box .v{font-family:var(--mono);font-size:19px;font-weight:650;margin-top:3px}
+  .be-box .d{font-size:10.5px;color:var(--text-dim);margin-top:3px}
+  .gap-pos{color:var(--green)}
+  .gap-neg{color:var(--red)}
+
+  .warn{margin-top:14px;background:var(--red-bg);border:1px solid #5c1f1f;border-radius:8px;
+    padding:11px 12px;font-size:12.5px;color:#ffb3ae;display:flex;gap:9px;align-items:flex-start}
+  .warn .ic{font-size:15px;line-height:1.2}
+  .warn b{color:#ffd9d6}
+
+  .pl-line{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line-soft);font-size:13px}
+  .pl-line .v{font-family:var(--mono)}
+  .pl-line.minus .v{color:var(--text-dim)}
+  .pl-line.eq{border-bottom:none;border-top:1px solid var(--line);margin-top:4px;padding-top:9px;font-weight:650}
+
+  /* booking planner */
+  .bookingsection{margin-top:22px}
+  .bk-intro{font-size:12px;color:var(--text-dim);margin-bottom:12px;line-height:1.6}
+  .bk-intro b{color:var(--text)}
+  .bk-tabs{display:flex;gap:6px;margin-bottom:6px}
+  .bk-tabs button{padding:7px 16px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--text-dim);cursor:pointer;font-size:12.5px}
+  .bk-tabs button.active{background:var(--accent-dim);border-color:var(--accent);color:#fff}
+  .bk-legend{font-size:11px;color:var(--text-faint);margin:6px 0 12px;display:flex;gap:16px;flex-wrap:wrap}
+  .bk-legend .sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px;border:1px solid var(--line)}
+  .bk-grids{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:1100px){.bk-grids{grid-template-columns:1fr}}
+  .bk-sport{border:1px solid var(--line-soft);border-radius:8px;padding:10px;overflow-x:auto}
+  .bk-sport h3{margin:0 0 10px;font-size:12.5px;font-weight:650;display:flex;justify-content:space-between;align-items:center}
+  .bk-sport h3 .courts{font-size:11px;color:var(--text-faint);font-weight:500}
+  .bk-clear{background:transparent;border:1px solid var(--line);color:var(--text-faint);
+    font-size:10.5px;padding:3px 8px;border-radius:5px;cursor:pointer}
+  .bk-clear:hover{border-color:var(--red);color:var(--red)}
+  table.bk{border-collapse:collapse}
+  table.bk th,table.bk td{padding:0}
+  .bk-hh{font-family:var(--mono);font-size:9px;color:var(--text-faint);text-align:center;
+    min-width:21px;cursor:pointer;padding-bottom:4px;user-select:none}
+  .bk-hh:hover{color:var(--text)}
+  .bk-hh.night{color:#8b93c4}
+  .bk-rowlbl{font-size:10px;color:var(--text-dim);padding-right:7px;text-align:right;
+    cursor:pointer;white-space:nowrap;user-select:none;font-family:var(--mono)}
+  .bk-rowlbl:hover{color:var(--text)}
+  .bk-cell{width:21px;height:21px;border:1px solid var(--line);cursor:pointer;border-radius:3px}
+  .bk-cell.day{background:var(--panel-2)}
+  .bk-cell.night{background:#10151c}
+  .bk-cell:hover{outline:1px solid var(--accent)}
+  .bk-cell.bandstart,.bk-hh.bandstart{border-left:2px solid var(--amber)}
+  .bk-cell.on.futsal{background:var(--futsal);border-color:var(--futsal)}
+  .bk-cell.on.pick{background:var(--pick);border-color:var(--pick)}
+  .bk-foot{margin-top:9px;font-size:11.5px;color:var(--text-dim);font-family:var(--mono)}
+  .bk-foot b{color:var(--text)}
+  .bk-sumgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0 4px}
+  @media(max-width:700px){.bk-sumgrid{grid-template-columns:1fr}}
+  .be-box.hi{background:var(--green-bg);border-color:#1c5128}
+  .be-box.hi .v{color:var(--green)}
+  .bk-note{font-size:11.5px;color:var(--text-dim);margin:8px 0 4px;line-height:1.6}
+  .bk-note b{color:var(--text)}
+  .bk-apply{margin-top:12px;background:var(--accent-dim);border:1px solid var(--accent);color:#fff;
+    padding:9px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+  .bk-apply:hover{background:var(--accent)}
+  .bk-applied{margin-top:9px;font-size:12px;color:var(--green);background:var(--green-bg);
+    border:1px solid #1c5128;border-radius:6px;padding:8px 10px;line-height:1.5}
+
+  .foot{margin-top:26px;border-top:1px solid var(--line);padding-top:14px;color:var(--text-faint);font-size:11.5px;line-height:1.7}
+  .foot b{color:var(--text-dim)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Held as text/babel-src so neither the browser nor Babel's auto-transform runs it;
+     the bootstrap below compiles it with the CLASSIC JSX runtime (no import statements). -->
+<script type="text/babel-src" id="appsrc">
+const { useState, useMemo, useEffect, useRef } = React;
+
+/* ============================================================================
+   CONSTANTS — fixed operating parameters (not user-editable in v1)
+   ========================================================================== */
+const COURT_TYPES = ['futsal', 'pickleball'];
+const DAY_TYPES   = ['weekday', 'weekend'];
+const TIME_BANDS  = ['day', 'night'];
+const COURTS      = { futsal: 2, pickleball: 5 };
+const BAND_HOURS  = { day: 11, night: 9 };        // Day 06:00–17:00 = 11h, Night 17:00–02:00 = 9h
+const BAND_KEYS   = ['weekday-day','weekday-night','weekend-day','weekend-night'];
+const L = {
+  futsal:'Futsal', pickleball:'Pickleball',
+  weekday:'Weekday', weekend:'Weekend',
+  day:'Day (06:00–17:00)', night:'Night (17:00–02:00)',
+};
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+// Booking grid: the 20 open hours 06:00 → 02:00, as start-of-slot hours.
+const HOURS = (function(){ const a=[]; for (let h=6; h<=23; h++) a.push(h); a.push(0); a.push(1); return a; })();
+function slotBand(h){ return (h >= 6 && h <= 16) ? 'day' : 'night'; } // 06:00–17:00 inclusive = day
+function hourLabel(h){ const ap = h < 12 ? 'a' : 'p'; let hh = h % 12; if (hh === 0) hh = 12; return hh + ap; }
+
+/* ============================================================================
+   CALCULATION ENGINE — pure functions (the "show your work" views render these
+   exact outputs; the same functions feed the headline numbers).
+   ========================================================================== */
+
+// month is 1-12
+function getCalendarBreakdown(month, year){
+  const totalDays = new Date(year, month, 0).getDate();
+  let weekdayDays = 0, weekendDays = 0;
+  for (let d = 1; d <= totalDays; d++){
+    const dow = new Date(year, month - 1, d).getDay(); // 0=Sun ... 6=Sat
+    if (dow === 0 || dow === 6) weekendDays++; else weekdayDays++;
+  }
+  return { weekdayDays, weekendDays, totalDays };
+}
+
+// Available hours in the period for one court in this cell (band hours × days of that day-type)
+function getCellHours(dayType, timeBand, cal){
+  const days = dayType === 'weekday' ? cal.weekdayDays : cal.weekendDays;
+  return BAND_HOURS[timeBand] * days;
+}
+
+// Resolve the utilization fraction that applies to a given cell
+function getCellUtilization(util, courtType, dayType, timeBand){
+  if (util.mode === 'simple') return clamp01(util.global);
+  const band = util.bands[`${dayType}-${timeBand}`];
+  if (band.override) return clamp01(band[courtType]);
+  return clamp01(band.combined);
+}
+
+// courts × cellHours × utilization%
+function getCellBookedHours(courtType, dayType, timeBand, util, cal){
+  return COURTS[courtType] * getCellHours(dayType, timeBand, cal)
+       * getCellUtilization(util, courtType, dayType, timeBand);
+}
+
+function getCourtRevenue(priceGrid, util, cal){
+  const perCell = [];
+  let total = 0, totalBookedHours = 0;
+  for (const ct of COURT_TYPES)
+    for (const dt of DAY_TYPES)
+      for (const tb of TIME_BANDS){
+        const courts      = COURTS[ct];
+        const days        = dt === 'weekday' ? cal.weekdayDays : cal.weekendDays;
+        const cellHours   = getCellHours(dt, tb, cal);
+        const u           = getCellUtilization(util, ct, dt, tb);
+        const bookedHours = courts * cellHours * u;
+        const price       = num(priceGrid[ct][dt][tb]);
+        const revenue     = bookedHours * price;
+        total += revenue; totalBookedHours += bookedHours;
+        perCell.push({ ct, dt, tb, courts, days, bandHours: BAND_HOURS[tb], cellHours, u, bookedHours, price, revenue });
+      }
+  return { perCell, total, totalBookedHours };
+}
+
+function getAdditionalRevenue(items){
+  const perItem = items.map(i => ({ ...i, amount: num(i.amount) }));
+  return { perItem, total: perItem.reduce((s,i) => s + i.amount, 0) };
+}
+
+function getFixedExpenses(items){
+  const perItem = items.map(i => ({ ...i, amount: num(i.amount) }));
+  return { perItem, total: perItem.reduce((s,i) => s + i.amount, 0) };
+}
+
+// Variable expenses support two calc styles:
+//   perHour : rate (RM/h) × total booked hours across all cells
+//   percent : rate (%)   × total revenue
+function getVariableExpenses(items, totalBookedHours, totalRevenue){
+  const perItem = items.map(i => {
+    const rate = num(i.rate);
+    let amount, basis;
+    if (i.style === 'percent'){ amount = (rate/100) * totalRevenue; basis = totalRevenue; }
+    else { amount = rate * totalBookedHours; basis = totalBookedHours; }
+    return { ...i, rate, amount, basis };
+  });
+  return { perItem, total: perItem.reduce((s,i) => s + i.amount, 0) };
+}
+
+function getProfit(totalRevenue, totalExpenses){ return totalRevenue - totalExpenses; }
+
+// Solve for the single uniform utilization u where profit = 0.
+//   Rev(u)  = u·R1 + addRev
+//   Exp(u)  = fixedTotal + perHourRateSum·(u·H1) + pctSum·(u·R1 + addRev)
+//   Profit(u) = u·[R1·(1−pctSum) − perHourRateSum·H1] + [addRev·(1−pctSum) − fixedTotal]
+//   ⇒ u* = (fixedTotal − addRev·(1−pctSum)) / (R1·(1−pctSum) − perHourRateSum·H1)
+function getBreakevenUtilization(priceGrid, fixedTotal, variableItems, additionalRevenueTotal, cal){
+  const full = getCourtRevenue(priceGrid, { mode:'simple', global:1 }, cal);
+  const R1 = full.total, H1 = full.totalBookedHours;
+  const perHourRateSum = variableItems.filter(i=>i.style==='perHour').reduce((s,i)=>s+num(i.rate),0);
+  const pctSum = variableItems.filter(i=>i.style==='percent').reduce((s,i)=>s+num(i.rate),0)/100;
+
+  const denom = R1*(1-pctSum) - perHourRateSum*H1;   // contribution per unit uniform utilization
+  const numer = fixedTotal - additionalRevenueTotal*(1-pctSum);
+
+  let u, feasible = true, reason = '';
+  if (denom <= 0){
+    feasible = false; u = Infinity;
+    reason = 'Each additional booking earns less than it costs in variable expenses — no amount of utilization reaches breakeven at these prices.';
+  } else {
+    u = numer/denom;
+    if (u > 1){ feasible = false; reason = 'Breakeven needs more than 100% of theoretical capacity — not achievable.'; }
+    else if (u < 0){ u = 0; reason = 'Already at or beyond breakeven with zero court bookings — additional revenue covers fixed costs.'; }
+  }
+  return { u, feasible, reason, R1, H1, perHourRateSum, pctSum, denom, numer, fixedTotal, additionalRevenueTotal };
+}
+
+// Total revenue figure at which profit = 0 (revenue at the breakeven utilization point)
+function getBreakevenRevenue(be){
+  if (!isFinite(be.u)) return Infinity;
+  return be.additionalRevenueTotal + be.u * be.R1;
+}
+
+/* ---- BOOKING PLANNER engine (standalone — NOT linked to the utilization sliders) ----
+   Each selected box = one court booked for one hour, priced at that hour's band rate. */
+function bookingBoxKeys(map){ const m = map || {}; return Object.keys(m).filter(k => m[k]); }
+
+function bandAvailableBoxes(sport, timeBand){ return COURTS[sport] * BAND_HOURS[timeBand]; }
+
+// One representative day for one sport: revenue, box count, and per-band split
+function getBookingDay(map, sport, dayType, prices){
+  let revenue = 0, boxes = 0;
+  const band = { day:{ boxes:0, revenue:0 }, night:{ boxes:0, revenue:0 } };
+  for (const key of bookingBoxKeys(map)){
+    const hour  = parseInt(key.split('_')[1], 10);
+    const b     = slotBand(hour);
+    const price = num(prices[sport][dayType][b]);
+    revenue += price; boxes += 1;
+    band[b].boxes += 1; band[b].revenue += price;
+  }
+  return { revenue, boxes, band };
+}
+
+// Roll the painted weekday + weekend days up to a month, plus the utilization each pattern implies
+function getBookingSummary(booking, prices, cal){
+  const sel  = booking.sel;
+  const days = { weekday: cal.weekdayDays, weekend: cal.weekendDays };
+  const perSportDay = {};
+  const dayTotals   = { weekday:{ revenue:0, boxes:0 }, weekend:{ revenue:0, boxes:0 } };
+  let monthlyRevenue = 0, monthlyBoxes = 0;
+
+  for (const dt of DAY_TYPES){
+    perSportDay[dt] = {};
+    for (const sp of COURT_TYPES){
+      const d = getBookingDay(sel[dt][sp], sp, dt, prices);
+      perSportDay[dt][sp] = d;
+      dayTotals[dt].revenue += d.revenue;
+      dayTotals[dt].boxes   += d.boxes;
+      monthlyRevenue += d.revenue * days[dt];
+      monthlyBoxes   += d.boxes   * days[dt];
+    }
+  }
+
+  // Implied utilization per band-key (matches the slider structure) — purely informational
+  const implied = {};
+  for (const dt of DAY_TYPES)
+    for (const tb of TIME_BANDS){
+      const selF = perSportDay[dt]['futsal'].band[tb].boxes;
+      const selP = perSportDay[dt]['pickleball'].band[tb].boxes;
+      const avF  = bandAvailableBoxes('futsal', tb);
+      const avP  = bandAvailableBoxes('pickleball', tb);
+      implied[`${dt}-${tb}`] = {
+        futsal:     avF ? selF/avF : 0,
+        pickleball: avP ? selP/avP : 0,
+        combined:   (avF+avP) ? (selF+selP)/(avF+avP) : 0,
+      };
+    }
+
+  return { perSportDay, dayTotals, monthlyRevenue, monthlyBoxes, implied, days };
+}
+
+/* ---- small helpers ---- */
+function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
+function clamp01(v){ return Math.max(0, Math.min(1, num(v))); }
+function uid(){ return 'i' + Math.random().toString(36).slice(2,9); }
+const rmFmt = new Intl.NumberFormat('en-MY', { maximumFractionDigits:0 });
+const rmFmt2 = new Intl.NumberFormat('en-MY', { minimumFractionDigits:2, maximumFractionDigits:2 });
+function RM(n){ return isFinite(n) ? 'RM ' + rmFmt.format(Math.round(n)) : '—'; }
+function RM2(n){ return isFinite(n) ? 'RM ' + rmFmt2.format(n) : '—'; }
+function H(n){ return (Math.round(n*10)/10).toLocaleString('en-MY',{maximumFractionDigits:1}) + ' h'; }
+function PCT(frac){ return isFinite(frac) ? (Math.round(frac*1000)/10) + '%' : '—'; }
+
+/* ============================================================================
+   DEFAULTS / PERSISTENCE
+   ========================================================================== */
+// Light illustrative booking pattern so the planner isn't blank on first run.
+function seedBooking(){
+  const fill = (hours, courts) => { const m={}; courts.forEach(c => hours.forEach(h => m[c+'_'+h] = true)); return m; };
+  return {
+    tab: 'weekday',
+    sel: {
+      weekday: {
+        futsal:     fill([19,20,21],          [0,1]),       // weeknight evening peak
+        pickleball: fill([9,10,19,20,21],     [0,1,2]),     // morning + evening
+      },
+      weekend: {
+        futsal:     fill([10,11,15,16,20,21], [0,1]),
+        pickleball: fill([10,11,15,16,19,20,21], [0,1,2,3]),
+      },
+    },
+  };
+}
+
+function defaults(){
+  const now = new Date();
+  return {
+    version: 1,
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+    booking: seedBooking(),
+    prices: {
+      futsal:     { weekday:{ day:60, night:90 }, weekend:{ day:80, night:100 } },
+      pickleball: { weekday:{ day:30, night:50 }, weekend:{ day:40, night:55  } },
+    },
+    util: {
+      mode: 'simple',
+      global: 0.35,
+      bands: {
+        'weekday-day':   { combined:0.20, override:false, futsal:0.20, pickleball:0.20 },
+        'weekday-night': { combined:0.55, override:false, futsal:0.55, pickleball:0.55 },
+        'weekend-day':   { combined:0.45, override:false, futsal:0.45, pickleball:0.45 },
+        'weekend-night': { combined:0.60, override:false, futsal:0.60, pickleball:0.60 },
+      },
+    },
+    additionalRevenue: [
+      { id:uid(), name:'Equipment rental', amount:1500 },
+      { id:uid(), name:'Vending machine',  amount:800  },
+    ],
+    fixedExpenses: [
+      { id:uid(), name:'Rent',             amount:25000 },
+      { id:uid(), name:'Salaries',         amount:12000 },
+      { id:uid(), name:'Insurance',        amount:800   },
+      { id:uid(), name:'Base utility',     amount:3000  },
+      { id:uid(), name:'Licenses/permits', amount:500   },
+    ],
+    variableExpenses: [
+      { id:uid(), name:'Incremental utility',       style:'perHour', rate:5 },
+      { id:uid(), name:'Cleaning',                  style:'perHour', rate:3 },
+      { id:uid(), name:'Maintenance/wear reserve',  style:'perHour', rate:2 },
+      { id:uid(), name:'Payment gateway fee',       style:'percent', rate:2.0 },
+    ],
+  };
+}
+
+const STORAGE_KEY = 'sportsHallModel.v1';
+// Prefer Claude's window.storage (personal scope) if present; otherwise localStorage.
+const Store = {
+  async load(){
+    try {
+      if (typeof window !== 'undefined' && window.storage && window.storage.getItem){
+        const v = await window.storage.getItem(STORAGE_KEY);
+        if (v) return JSON.parse(v);
+      }
+    } catch(e){ /* fall through */ }
+    try { const v = localStorage.getItem(STORAGE_KEY); return v ? JSON.parse(v) : null; }
+    catch(e){ return null; }
+  },
+  async save(state){
+    const s = JSON.stringify(state);
+    try {
+      if (typeof window !== 'undefined' && window.storage && window.storage.setItem){
+        await window.storage.setItem(STORAGE_KEY, s); return;
+      }
+    } catch(e){ /* fall through */ }
+    try { localStorage.setItem(STORAGE_KEY, s); } catch(e){ /* no-op */ }
+  },
+};
+
+// Defensive merge so older/partial saved state still loads cleanly.
+function normalize(loaded){
+  const d = defaults();
+  if (!loaded || typeof loaded !== 'object') return d;
+  const s = { ...d, ...loaded };
+  s.prices = { ...d.prices, ...(loaded.prices||{}) };
+  for (const ct of COURT_TYPES){
+    s.prices[ct] = s.prices[ct] || d.prices[ct];
+    for (const dt of DAY_TYPES){
+      s.prices[ct][dt] = { ...d.prices[ct][dt], ...((loaded.prices||{})[ct]||{})[dt] };
+    }
+  }
+  s.util = { ...d.util, ...(loaded.util||{}) };
+  s.util.bands = { ...d.util.bands, ...((loaded.util||{}).bands||{}) };
+  for (const k of BAND_KEYS) s.util.bands[k] = { ...d.util.bands[k], ...(s.util.bands[k]||{}) };
+  s.additionalRevenue = Array.isArray(loaded.additionalRevenue) ? loaded.additionalRevenue : d.additionalRevenue;
+  s.fixedExpenses     = Array.isArray(loaded.fixedExpenses)     ? loaded.fixedExpenses     : d.fixedExpenses;
+  s.variableExpenses  = Array.isArray(loaded.variableExpenses)  ? loaded.variableExpenses  : d.variableExpenses;
+
+  const lb = loaded.booking;
+  s.booking = (lb && lb.sel) ? {
+    tab: lb.tab === 'weekend' ? 'weekend' : 'weekday',
+    sel: {
+      weekday: { futsal:(lb.sel.weekday||{}).futsal||{}, pickleball:(lb.sel.weekday||{}).pickleball||{} },
+      weekend: { futsal:(lb.sel.weekend||{}).futsal||{}, pickleball:(lb.sel.weekend||{}).pickleball||{} },
+    },
+  } : d.booking;
+  return s;
+}
+
+/* ============================================================================
+   GENERIC UI BITS
+   ========================================================================== */
+function NumberInput({ value, onChange, className='num', step='any', min }){
+  const [txt, setTxt] = useState(String(value));
+  useEffect(() => { setTxt(String(value)); }, [value]);
+  return (
+    <input type="number" className={className} step={step} min={min} value={txt}
+      onChange={e => {
+        setTxt(e.target.value);
+        const n = e.target.value === '' ? 0 : Number(e.target.value);
+        if (!Number.isNaN(n)) onChange(n);
+      }}
+      onBlur={() => setTxt(String(value))} />
+  );
+}
+
+function Expandable({ label, summary, children, defaultOpen=false }){
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="exp">
+      <button className="exp-toggle" onClick={() => setOpen(o => !o)}>
+        <span className="exp-caret">{open ? '▼' : '▶'}</span>
+        <span className="lab">{label}</span>
+        {summary != null && <span className="sum">{summary}</span>}
+      </button>
+      {open && <div className="exp-body">{children}</div>}
+    </div>
+  );
+}
+
+/* ============================================================================
+   EXPORT (JPG / PDF) — rasterize the whole dashboard with html2canvas; JPG saves
+   the image directly, PDF paginates it across A4. Falls back to the browser's
+   print dialog if the libraries are unavailable.
+   ========================================================================== */
+function ExportBar({ month, year }){
+  const [busy, setBusy] = useState('');
+
+  const fileBase = () =>
+    `sports-hall-evaluation-${MONTHS[month-1]}-${year}`.toLowerCase().replace(/\s+/g, '-');
+
+  const capture = async () => {
+    const target = document.querySelector('.wrap');
+    const hidden = Array.prototype.slice.call(document.querySelectorAll('.no-export'));
+    hidden.forEach(el => { el.style.visibility = 'hidden'; });
+    try {
+      return await html2canvas(target, {
+        backgroundColor: getComputedStyle(document.body).backgroundColor || '#0f1419',
+        scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
+        useCORS: true,
+        windowWidth: target.scrollWidth,
+        windowHeight: target.scrollHeight,
+      });
+    } finally {
+      hidden.forEach(el => { el.style.visibility = ''; });
+    }
+  };
+
+  const saveJPG = async () => {
+    if (typeof html2canvas === 'undefined'){ alert('JPG export needs the html2canvas library, which did not load.'); return; }
+    try {
+      setBusy('Generating JPG…');
+      const canvas = await capture();
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/jpeg', 0.92);
+      a.download = fileBase() + '.jpg';
+      a.click();
+    } catch(e){ console.error(e); alert('JPG export failed: ' + ((e && e.message) || e)); }
+    finally { setBusy(''); }
+  };
+
+  const savePDF = async () => {
+    const haveLibs = typeof html2canvas !== 'undefined' && window.jspdf && window.jspdf.jsPDF;
+    if (!haveLibs){ window.print(); return; } // fallback: browser "Save as PDF"
+    try {
+      setBusy('Generating PDF…');
+      const canvas = await capture();
+      const img = canvas.toDataURL('image/jpeg', 0.92);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      const imgH = canvas.height * pw / canvas.width;   // image height when scaled to page width
+      let heightLeft = imgH, position = 0;
+      pdf.addImage(img, 'JPEG', 0, position, pw, imgH);
+      heightLeft -= ph;
+      while (heightLeft > 0){
+        position -= ph;
+        pdf.addPage();
+        pdf.addImage(img, 'JPEG', 0, position, pw, imgH);
+        heightLeft -= ph;
+      }
+      pdf.save(fileBase() + '.pdf');
+    } catch(e){ console.error(e); alert('PDF export failed: ' + ((e && e.message) || e)); }
+    finally { setBusy(''); }
+  };
+
+  return (
+    <div className="exportbar no-export">
+      {busy && <span className="estatus">{busy}</span>}
+      <button className="ebtn" onClick={savePDF} disabled={!!busy} title="Save the dashboard as a PDF">⬇ PDF</button>
+      <button className="ebtn" onClick={saveJPG} disabled={!!busy} title="Save the dashboard as a JPG image">⬇ JPG</button>
+    </div>
+  );
+}
+
+/* ============================================================================
+   PERIOD SELECTOR
+   ========================================================================== */
+function PeriodBar({ month, year, cal, onMonth, onYear }){
+  return (
+    <div className="period">
+      <div className="field">
+        <label>Month</label>
+        <select value={month} onChange={e => onMonth(Number(e.target.value))}>
+          {MONTHS.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
+        </select>
+      </div>
+      <div className="field">
+        <label>Year</label>
+        <NumberInput className="num" value={year} step="1" onChange={v => onYear(Math.round(v))} />
+      </div>
+      <div className="cal-note">
+        {MONTHS[month-1]} {year}: <b>{cal.totalDays}</b> days
+        &nbsp;=&nbsp; <b>{cal.weekdayDays}</b> weekdays + <b>{cal.weekendDays}</b> weekend days
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   EXPENSES (left column)
+   ========================================================================== */
+function ExpensePanel({ state, set, fixed, variable, totalBookedHours, totalRevenue }){
+  const setFixed = (items) => set({ fixedExpenses: items });
+  const setVar   = (items) => set({ variableExpenses: items });
+
+  const editFixed = (id, patch) => setFixed(state.fixedExpenses.map(i => i.id===id ? {...i,...patch} : i));
+  const editVar   = (id, patch) => setVar(state.variableExpenses.map(i => i.id===id ? {...i,...patch} : i));
+
+  const grand = fixed.total + variable.total;
+
+  return (
+    <div className="col">
+      <div className="col-label">Expenses</div>
+
+      {/* Fixed */}
+      <div className="card">
+        <div className="card-head"><h2>Fixed expenses</h2><span className="hint">RM / month</span></div>
+        <div className="card-body">
+          {state.fixedExpenses.map(i => (
+            <div className="item" key={i.id}>
+              <input className="name" value={i.name} onChange={e => editFixed(i.id,{name:e.target.value})} />
+              <NumberInput value={i.amount} onChange={v => editFixed(i.id,{amount:v})} />
+              <button className="x" title="Remove" onClick={() => setFixed(state.fixedExpenses.filter(x=>x.id!==i.id))}>×</button>
+            </div>
+          ))}
+          <div className="additem">
+            <button onClick={() => setFixed([...state.fixedExpenses, {id:uid(),name:'New fixed cost',amount:0}])}>+ Add fixed expense</button>
+          </div>
+          <div className="subtotal"><span>Fixed subtotal</span><span className="v">{RM(fixed.total)}</span></div>
+          <Expandable label="Show fixed breakdown" summary={RM(fixed.total)}>
+            <table className="math">
+              <thead><tr><th>Item</th><th>RM/mo</th></tr></thead>
+              <tbody>
+                {fixed.perItem.map(i => <tr key={i.id}><td>{i.name||'(unnamed)'}</td><td className="v">{RM2(i.amount)}</td></tr>)}
+                <tr className="tot"><td>Sum</td><td>{RM2(fixed.total)}</td></tr>
+              </tbody>
+            </table>
+          </Expandable>
+        </div>
+      </div>
+
+      {/* Variable */}
+      <div className="card">
+        <div className="card-head"><h2>Variable expenses</h2><span className="hint">scale with usage</span></div>
+        <div className="card-body">
+          {state.variableExpenses.map(i => (
+            <div className="item" key={i.id}>
+              <input className="name" value={i.name} onChange={e => editVar(i.id,{name:e.target.value})} />
+              <NumberInput className="num small" value={i.rate} onChange={v => editVar(i.id,{rate:v})} />
+              <select className="style" value={i.style} onChange={e => editVar(i.id,{style:e.target.value})}>
+                <option value="perHour">RM/h</option>
+                <option value="percent">% rev</option>
+              </select>
+              <button className="x" title="Remove" onClick={() => setVar(state.variableExpenses.filter(x=>x.id!==i.id))}>×</button>
+            </div>
+          ))}
+          <div className="additem">
+            <button onClick={() => setVar([...state.variableExpenses, {id:uid(),name:'New variable cost',style:'perHour',rate:0}])}>+ Add variable expense</button>
+          </div>
+          <div className="subtotal"><span>Variable subtotal</span><span className="v">{RM(variable.total)}</span></div>
+          <Expandable label="Show variable breakdown" summary={RM(variable.total)}>
+            <div className="formula">
+              total booked hours = <span className="hl">{H(totalBookedHours)}</span>{'\n'}
+              total revenue = <span className="hl">{RM(totalRevenue)}</span>
+            </div>
+            <table className="math">
+              <thead><tr><th>Item</th><th>Rate</th><th>× Basis</th><th>= RM/mo</th></tr></thead>
+              <tbody>
+                {variable.perItem.map(i => (
+                  <tr key={i.id}>
+                    <td>{i.name||'(unnamed)'}</td>
+                    <td>{i.style==='percent' ? i.rate+'%' : RM2(i.rate)+'/h'}</td>
+                    <td>{i.style==='percent' ? RM(i.basis) : H(i.basis)}</td>
+                    <td className="v">{RM2(i.amount)}</td>
+                  </tr>
+                ))}
+                <tr className="tot"><td>Sum</td><td></td><td></td><td>{RM2(variable.total)}</td></tr>
+              </tbody>
+            </table>
+          </Expandable>
+        </div>
+      </div>
+
+      {/* Total */}
+      <div className="card">
+        <div className="card-body" style={{paddingTop:14}}>
+          <div className="total-row">
+            <span className="lbl">Total expenses</span>
+            <span className="val">{RM(grand)}</span>
+          </div>
+          <Expandable label="Show total expense math" summary={RM(grand)}>
+            <div className="formula">
+              fixed subtotal&nbsp;&nbsp;&nbsp;<span className="hl">{RM2(fixed.total)}</span>{'\n'}
+              + variable subtotal <span className="hl">{RM2(variable.total)}</span>{'\n'}
+              ────────────────────────{'\n'}
+              = total expenses&nbsp;&nbsp;<span className="hl">{RM2(grand)}</span>
+            </div>
+          </Expandable>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   REVENUE (center column)
+   ========================================================================== */
+function PriceGrid({ state, set, courtRev }){
+  const setPrice = (ct, dt, tb, v) => {
+    const prices = JSON.parse(JSON.stringify(state.prices));
+    prices[ct][dt][tb] = v;
+    set({ prices });
+  };
+  const cellOf = (ct,dt,tb) => courtRev.perCell.find(c => c.ct===ct && c.dt===dt && c.tb===tb) || {};
+  return (
+    <div className="pg">
+      {COURT_TYPES.map(ct => (
+        <div className="pg-court" key={ct}>
+          <h3>{L[ct]} <span className="courts">{COURTS[ct]} courts</span></h3>
+          {DAY_TYPES.map(dt => TIME_BANDS.map(tb => {
+            const c = cellOf(ct,dt,tb);
+            return (
+              <div className="pg-cell" key={dt+tb}>
+                <div className="cl">{L[dt]} · {L[tb]}</div>
+                <div className="row">
+                  <span className="pfx">RM</span>
+                  <NumberInput value={state.prices[ct][dt][tb]} onChange={v => setPrice(ct,dt,tb,v)} />
+                  <span className="pfx">/ hour</span>
+                </div>
+                <div className="booked">
+                  {COURTS[ct]} × {H(c.cellHours||0)} × {PCT(c.u||0)} = <b>{H(c.bookedHours||0)}</b> booked → {RM(c.revenue||0)}
+                </div>
+              </div>
+            );
+          }))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UtilizationControls({ state, set, courtRev, cal }){
+  const util = state.util;
+  const setUtil = (patch) => set({ util: { ...util, ...patch } });
+  const setBand = (key, patch) => setUtil({ bands: { ...util.bands, [key]: { ...util.bands[key], ...patch } } });
+
+  // live RM impact per band (sum across court types)
+  const bandImpact = (key) => {
+    const cells = courtRev.perCell.filter(c => `${c.dt}-${c.tb}` === key);
+    return {
+      hours: cells.reduce((s,c)=>s+c.bookedHours,0),
+      rev:   cells.reduce((s,c)=>s+c.revenue,0),
+    };
+  };
+
+  return (
+    <div className="card">
+      <div className="card-head"><h2>Utilization</h2><span className="hint">theoretical ceiling</span></div>
+      <div className="card-body">
+        <div className="util-modes">
+          <button className={util.mode==='simple'?'active':''}   onClick={() => setUtil({mode:'simple'})}>Simple (1 slider)</button>
+          <button className={util.mode==='detailed'?'active':''} onClick={() => setUtil({mode:'detailed'})}>Detailed (per band)</button>
+        </div>
+        <div className="ceiling-note">
+          ⚠ 100% = every court booked every open hour — a theoretical ceiling, not realistically achievable. Use it only to see the model's upper bound.
+        </div>
+
+        {util.mode === 'simple' ? (
+          <div className="band">
+            <div className="bhead">
+              <span className="bname">Global utilization</span>
+              <span className="bpct">{PCT(util.global)}</span>
+            </div>
+            <div className="slider-row">
+              <input type="range" min="0" max="100" step="1"
+                value={Math.round(util.global*100)}
+                onChange={e => setUtil({ global: Number(e.target.value)/100 })} />
+            </div>
+            <div className="bimpact">Applied uniformly to all 8 cells → <b>{H(courtRev.totalBookedHours)}</b> booked · <b>{RM(courtRev.total)}</b> court revenue</div>
+          </div>
+        ) : (
+          BAND_KEYS.map(key => {
+            const [dt, tb] = key.split('-');
+            const band = util.bands[key];
+            const imp = bandImpact(key);
+            return (
+              <div className="band" key={key}>
+                <div className="bhead">
+                  <span className="bname">{L[dt]} · {L[tb]}</span>
+                  {!band.override && <span className="bpct">{PCT(band.combined)}</span>}
+                </div>
+                {!band.override && (
+                  <div className="slider-row">
+                    <input type="range" min="0" max="100" step="1"
+                      value={Math.round(band.combined*100)}
+                      onChange={e => setBand(key, { combined: Number(e.target.value)/100 })} />
+                  </div>
+                )}
+                {band.override && (
+                  <div className="ovr">
+                    {COURT_TYPES.map(ct => (
+                      <div className="sub-band" key={ct}>
+                        <span className="sn">{L[ct]}</span>
+                        <input type="range" min="0" max="100" step="1"
+                          value={Math.round(band[ct]*100)}
+                          onChange={e => setBand(key, { [ct]: Number(e.target.value)/100 })} />
+                        <span className="sv">{PCT(band[ct])}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="bimpact"><b>{H(imp.hours)}</b> booked · <b>{RM(imp.rev)}</b> court revenue</div>
+                <button className="ovr-toggle" onClick={() => setBand(key, { override: !band.override })}>
+                  {band.override ? '↥ use one slider for both court types' : '⚙ customize Futsal vs Pickleball separately'}
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RevenuePanel({ state, set, courtRev, addRev, cal }){
+  const setAdd = (items) => set({ additionalRevenue: items });
+  const editAdd = (id, patch) => setAdd(state.additionalRevenue.map(i => i.id===id ? {...i,...patch} : i));
+  const totalRevenue = courtRev.total + addRev.total;
+
+  return (
+    <div className="col">
+      <div className="col-label">Revenue</div>
+
+      <div className="card">
+        <div className="card-head"><h2>Price grid</h2><span className="hint">RM/hour, tax-inclusive</span></div>
+        <div className="card-body">
+          <PriceGrid state={state} set={set} courtRev={courtRev} />
+        </div>
+      </div>
+
+      <UtilizationControls state={state} set={set} courtRev={courtRev} cal={cal} />
+
+      <div className="card">
+        <div className="card-head"><h2>Court booking revenue</h2><span className="hint">auto-calculated</span></div>
+        <div className="card-body">
+          <div className="total-row">
+            <span className="lbl">Court bookings</span>
+            <span className="val">{RM(courtRev.total)}</span>
+          </div>
+          <Expandable label="Show court revenue math (per cell)" summary={RM(courtRev.total)}>
+            <table className="math">
+              <thead><tr><th>Cell</th><th>Courts</th><th>Hrs/court</th><th>Util</th><th>Booked</th><th>RM/h</th><th>Revenue</th></tr></thead>
+              <tbody>
+                {courtRev.perCell.map((c,idx) => (
+                  <tr key={idx}>
+                    <td>{L[c.ct]} · {c.dt==='weekday'?'Wkdy':'Wknd'} · {c.tb==='day'?'Day':'Night'}</td>
+                    <td>{c.courts}</td>
+                    <td title={`${c.bandHours}h × ${c.days}d`}>{H(c.cellHours)}</td>
+                    <td>{PCT(c.u)}</td>
+                    <td>{H(c.bookedHours)}</td>
+                    <td>{RM2(c.price)}</td>
+                    <td className="v">{RM2(c.revenue)}</td>
+                  </tr>
+                ))}
+                <tr className="tot"><td>Total</td><td></td><td></td><td></td><td>{H(courtRev.totalBookedHours)}</td><td></td><td>{RM2(courtRev.total)}</td></tr>
+              </tbody>
+            </table>
+          </Expandable>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head"><h2>Additional revenue</h2><span className="hint">flat RM/month</span></div>
+        <div className="card-body">
+          {state.additionalRevenue.map(i => (
+            <div className="item" key={i.id}>
+              <input className="name" value={i.name} onChange={e => editAdd(i.id,{name:e.target.value})} />
+              <NumberInput value={i.amount} onChange={v => editAdd(i.id,{amount:v})} />
+              <button className="x" title="Remove" onClick={() => setAdd(state.additionalRevenue.filter(x=>x.id!==i.id))}>×</button>
+            </div>
+          ))}
+          <div className="additem">
+            <button onClick={() => setAdd([...state.additionalRevenue, {id:uid(),name:'New revenue item',amount:0}])}>+ Add revenue item</button>
+          </div>
+          <div className="subtotal"><span>Additional subtotal</span><span className="v">{RM(addRev.total)}</span></div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-body" style={{paddingTop:14}}>
+          <div className="total-row">
+            <span className="lbl">Total revenue</span>
+            <span className="val">{RM(totalRevenue)}</span>
+          </div>
+          <Expandable label="Show total revenue math" summary={RM(totalRevenue)}>
+            <div className="formula">
+              court bookings&nbsp;&nbsp;&nbsp;<span className="hl">{RM2(courtRev.total)}</span>{'\n'}
+              + additional rev&nbsp;&nbsp;<span className="hl">{RM2(addRev.total)}</span>{'\n'}
+              ────────────────────────{'\n'}
+              = total revenue&nbsp;&nbsp;&nbsp;<span className="hl">{RM2(totalRevenue)}</span>
+            </div>
+          </Expandable>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   PROFIT (right column)
+   ========================================================================== */
+function ProfitPanel({ totalRevenue, totalExpenses, profit, be, beRevenue, courtRev, addRev, fixed, variable, cal, currentUtilFrac }){
+  const EPS = Math.max(1, totalRevenue * 0.001); // breakeven band: within 0.1% of revenue
+  let status, label, icon;
+  if (profit > EPS){ status='profit'; label='Profit'; icon='▲'; }
+  else if (profit < -EPS){ status='loss'; label='Loss'; icon='▼'; }
+  else { status='breakeven'; label='Breakeven'; icon='＝'; }
+
+  const beU = be.feasible ? be.u : be.u; // may be Infinity / >1
+  const gap = (be.feasible && isFinite(be.u)) ? currentUtilFrac - be.u : null; // + = above breakeven
+  const nearMax = !be.feasible || (isFinite(be.u) && be.u >= 0.95);
+
+  return (
+    <div className="col">
+      <div className="col-label">Profit / Loss</div>
+
+      <div className="card">
+        <div className="card-body">
+          <div className={'status ' + status}>
+            <div className="stag"><span>{icon}</span><span>{label}</span></div>
+            <div className="fig">{profit >= 0 ? RM(profit) : '−' + RM(Math.abs(profit))}</div>
+            <div className="per">per month · {RM(profit*12)} per year (×12)</div>
+          </div>
+
+          <div className="be-grid">
+            <div className="be-box">
+              <div className="k">Breakeven utilization</div>
+              <div className="v">{be.feasible ? PCT(be.u) : (isFinite(be.u) ? PCT(be.u) : '—')}</div>
+              <div className="d">uniform across all cells</div>
+            </div>
+            <div className="be-box">
+              <div className="k">Current utilization</div>
+              <div className="v">{PCT(currentUtilFrac)}</div>
+              <div className="d">
+                {gap == null ? 'effective (booked ÷ max hrs)' :
+                  <span className={gap>=0?'gap-pos':'gap-neg'}>{gap>=0?'+':'−'}{PCT(Math.abs(gap))} vs breakeven</span>}
+              </div>
+            </div>
+            <div className="be-box">
+              <div className="k">Breakeven revenue</div>
+              <div className="v">{RM(beRevenue)}</div>
+              <div className="d">where profit = 0</div>
+            </div>
+            <div className="be-box">
+              <div className="k">Current revenue</div>
+              <div className="v">{RM(totalRevenue)}</div>
+              <div className="d">
+                {isFinite(beRevenue) ?
+                  <span className={totalRevenue>=beRevenue?'gap-pos':'gap-neg'}>
+                    {totalRevenue>=beRevenue?'+':'−'}{RM(Math.abs(totalRevenue-beRevenue))}
+                  </span> : '—'}
+              </div>
+            </div>
+          </div>
+
+          {nearMax && (
+            <div className="warn">
+              <span className="ic">⚠</span>
+              <span>
+                {be.feasible
+                  ? <span><b>Breakeven requires near-maximum theoretical capacity</b> ({PCT(be.u)}). This cost structure is barely viable at these prices.</span>
+                  : <span><b>Not viable at these prices.</b> {be.reason}</span>}
+              </span>
+            </div>
+          )}
+
+          <Expandable label="Show breakeven math" summary={be.feasible ? PCT(be.u) : '—'} >
+            <div className="formula">
+              {'At uniform utilization u, profit(u) = 0 solves to:'}{'\n'}
+              {'R₁ (court rev @100%) = '}<span className="hl">{RM(be.R1)}</span>{'\n'}
+              {'H₁ (booked hrs @100%) = '}<span className="hl">{H(be.H1)}</span>{'\n'}
+              {'fixed = '}<span className="hl">{RM(be.fixedTotal)}</span>{'   addl rev = '}<span className="hl">{RM(be.additionalRevenueTotal)}</span>{'\n'}
+              {'Σ per-hour rates = '}<span className="hl">{RM2(be.perHourRateSum)}/h</span>{'   Σ % fees = '}<span className="hl">{PCT(be.pctSum)}</span>{'\n'}
+              {'\n'}
+              {'denom = R₁·(1−%) − Σrate·H₁ = '}<span className="hl">{RM(be.denom)}</span>{'\n'}
+              {'numer = fixed − addl·(1−%)   = '}<span className="hl">{RM(be.numer)}</span>{'\n'}
+              {'u* = numer / denom = '}<span className={be.feasible?'g':'r'}>{isFinite(be.u)?PCT(be.u):'∞'}</span>{'\n'}
+              {'breakeven revenue = addl + u*·R₁ = '}<span className="hl">{RM(beRevenue)}</span>
+            </div>
+            {be.reason && <div style={{fontSize:'11.5px',color:'var(--text-dim)',marginTop:6}}>{be.reason}</div>}
+          </Expandable>
+        </div>
+      </div>
+
+      {/* Full P&L */}
+      <div className="card">
+        <div className="card-head"><h2>P&amp;L breakdown</h2><span className="hint">{MONTHS[/*set by parent via cal? */0] ? '' : ''}</span></div>
+        <div className="card-body">
+          <div className="pl-line"><span>Total revenue</span><span className="v">{RM(totalRevenue)}</span></div>
+          <div className="pl-line minus"><span>− Total expenses</span><span className="v">{RM(totalExpenses)}</span></div>
+          <div className="pl-line eq">
+            <span>= {label}</span>
+            <span className="v" style={{color: status==='profit'?'var(--green)':status==='loss'?'var(--red)':'var(--amber)'}}>
+              {profit >= 0 ? RM(profit) : '−'+RM(Math.abs(profit))}
+            </span>
+          </div>
+
+          <Expandable label="Revenue side" summary={RM(totalRevenue)}>
+            <table className="math">
+              <tbody>
+                <tr><td>Court bookings</td><td className="v">{RM2(courtRev.total)}</td></tr>
+                <tr><td>Additional revenue</td><td className="v">{RM2(addRev.total)}</td></tr>
+                <tr className="tot"><td>Total revenue</td><td>{RM2(totalRevenue)}</td></tr>
+              </tbody>
+            </table>
+          </Expandable>
+          <Expandable label="Expense side" summary={RM(totalExpenses)}>
+            <table className="math">
+              <tbody>
+                <tr><td>Fixed expenses</td><td className="v">{RM2(fixed.total)}</td></tr>
+                <tr><td>Variable expenses</td><td className="v">{RM2(variable.total)}</td></tr>
+                <tr className="tot"><td>Total expenses</td><td>{RM2(totalExpenses)}</td></tr>
+              </tbody>
+            </table>
+          </Expandable>
+
+          <div style={{marginTop:12,paddingTop:10,borderTop:'1px solid var(--line)',fontSize:'12px',color:'var(--text-dim)'}}>
+            <div style={{display:'flex',justifyContent:'space-between'}}>
+              <span>Annual projection (×12)</span>
+              <span style={{fontFamily:'var(--mono)',color: profit>=0?'var(--green)':'var(--red)'}}>
+                {profit>=0?RM(profit*12):'−'+RM(Math.abs(profit*12))}
+              </span>
+            </div>
+            <div style={{fontSize:'11px',color:'var(--text-faint)',marginTop:3}}>
+              Simple flat ×12 of this month — no seasonality modeled.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   BOOKING PLANNER (full-width section) — a manual "paint a typical day" grid.
+   Independent of the utilization sliders; it only reads the price grid + calendar.
+   ========================================================================== */
+function BookingGridSection({ state, set, prices, cal, summary }){
+  const booking = state.booking;
+  const [applied, setApplied] = useState(false);
+  if (!booking) return null;
+  const tab = booking.tab;
+
+  // Push the implied utilization into the Utilization sliders. Using per-court-type overrides
+  // makes the main P&L court revenue reconstruct this plan exactly:
+  //   courts × (bandHours×days) × [boxes/(courts×bandHours)] × price = boxes × days × price.
+  const applyImplied = () => {
+    if (!window.confirm(
+      'Apply this booking plan to the Utilization sliders?\n\n'
+      + '• Switches Utilization to Detailed mode\n'
+      + '• Turns on per-court-type overrides for all 4 bands\n'
+      + '• Overwrites every band with this plan\'s implied %\n\n'
+      + 'Your current utilization settings will be replaced. The booking grid itself is untouched.'
+    )) return;
+    const bands = {};
+    for (const key of BAND_KEYS){
+      const im = summary.implied[key];
+      bands[key] = { combined: im.combined, override: true, futsal: im.futsal, pickleball: im.pickleball };
+    }
+    set({ util: { ...state.util, mode: 'detailed', bands } });
+    setApplied(true);
+  };
+
+  const setBooking = (patch) => set({ booking: { ...booking, ...patch } });
+  const setSel = (dayType, sport, map) =>
+    setBooking({ sel: { ...booking.sel, [dayType]: { ...booking.sel[dayType], [sport]: map } } });
+
+  const toggleBox = (sport, court, hour) => {
+    const map = { ...booking.sel[tab][sport] };
+    const k = court + '_' + hour;
+    if (map[k]) delete map[k]; else map[k] = true;
+    setSel(tab, sport, map);
+  };
+  const toggleColumn = (sport, hour) => {
+    const map = { ...booking.sel[tab][sport] };
+    let allOn = true;
+    for (let c = 0; c < COURTS[sport]; c++) if (!map[c+'_'+hour]) { allOn = false; break; }
+    for (let c = 0; c < COURTS[sport]; c++){ const k = c+'_'+hour; if (allOn) delete map[k]; else map[k] = true; }
+    setSel(tab, sport, map);
+  };
+  const toggleRow = (sport, court) => {
+    const map = { ...booking.sel[tab][sport] };
+    const allOn = HOURS.every(h => map[court+'_'+h]);
+    for (const h of HOURS){ const k = court+'_'+h; if (allOn) delete map[k]; else map[k] = true; }
+    setSel(tab, sport, map);
+  };
+  const clearSport = (sport) => setSel(tab, sport, {});
+
+  const sportGrid = (sport) => {
+    const map = booking.sel[tab][sport];
+    const day = summary.perSportDay[tab][sport];
+    const cls = sport === 'futsal' ? 'futsal' : 'pick';
+    const prefix = sport === 'futsal' ? 'F' : 'P';
+    return (
+      <div className="bk-sport" key={sport}>
+        <h3>
+          <span>{L[sport]} <span className="courts">{COURTS[sport]} courts</span></span>
+          <button className="bk-clear" onClick={() => clearSport(sport)}>clear</button>
+        </h3>
+        <table className="bk">
+          <thead>
+            <tr>
+              <th></th>
+              {HOURS.map(h => (
+                <th key={h} className={'bk-hh ' + slotBand(h) + (h === 17 ? ' bandstart' : '')}
+                    title={'Toggle every ' + L[sport] + ' court at ' + hourLabel(h)}
+                    onClick={() => toggleColumn(sport, h)}>{hourLabel(h)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: COURTS[sport] }, (_, c) => (
+              <tr key={c}>
+                <td className="bk-rowlbl" title="Toggle whole court row"
+                    onClick={() => toggleRow(sport, c)}>{prefix}{c+1}</td>
+                {HOURS.map(h => {
+                  const on = !!map[c+'_'+h];
+                  const b  = slotBand(h);
+                  return <td key={h}
+                    className={'bk-cell ' + b + (h === 17 ? ' bandstart' : '') + (on ? (' on ' + cls) : '')}
+                    title={hourLabel(h) + '–' + hourLabel((h+1)%24) + ' · ' + (b==='day'?'Day':'Night')
+                           + ' · ' + RM(num(prices[sport][tab][b])) + '/h'}
+                    onClick={() => toggleBox(sport, c, h)} />;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="bk-foot"><b>{day.boxes}</b> court-hours · <b>{RM(day.revenue)}</b> this {L[tab].toLowerCase()}</div>
+      </div>
+    );
+  };
+
+  const wd = summary.dayTotals.weekday, we = summary.dayTotals.weekend;
+
+  return (
+    <div className="bookingsection">
+      <div className="col-label">Booking Planner</div>
+      <div className="card">
+        <div className="card-head">
+          <h2>Booking grid — paint a typical day</h2>
+          <span className="hint">{MONTHS[state.month-1]} {state.year}</span>
+        </div>
+        <div className="card-body">
+          <div className="bk-intro">
+            Click slots to mark when courts are typically booked on a <b>representative weekday</b> and a
+            <b> representative weekend day</b> — like your Excel hour-by-hour estimate, but visual. This is a
+            <b> standalone calculator</b>: it does <b>not</b> touch the utilization sliders. Use the
+            <b> implied utilization</b> figures below to decide what to set those sliders to afterwards.
+            <br/>Click an <b>hour header</b> to toggle that whole column; click a <b>court label</b> (F1, P3…) to toggle the row.
+          </div>
+
+          <div className="bk-tabs">
+            {DAY_TYPES.map(dt => (
+              <button key={dt} className={tab===dt?'active':''} onClick={() => setBooking({ tab: dt })}>
+                {L[dt]} {dt==='weekday' ? `(${cal.weekdayDays} days)` : `(${cal.weekendDays} days)`}
+              </button>
+            ))}
+          </div>
+          <div className="bk-legend">
+            <span><span className="sw" style={{background:'var(--panel-2)'}}></span>Day 06:00–17:00 (11h)</span>
+            <span><span className="sw" style={{background:'#10151c'}}></span>Night 17:00–02:00 (9h)</span>
+            <span><span className="sw" style={{background:'var(--futsal)'}}></span>Futsal booked</span>
+            <span><span className="sw" style={{background:'var(--pick)'}}></span>Pickleball booked</span>
+          </div>
+
+          <div className="bk-grids">
+            {COURT_TYPES.map(sp => sportGrid(sp))}
+          </div>
+
+          <div className="bk-sumgrid">
+            <div className="be-box">
+              <div className="k">Representative weekday</div>
+              <div className="v">{RM(wd.revenue)}</div>
+              <div className="d">{wd.boxes} court-hours / day</div>
+            </div>
+            <div className="be-box">
+              <div className="k">Representative weekend day</div>
+              <div className="v">{RM(we.revenue)}</div>
+              <div className="d">{we.boxes} court-hours / day</div>
+            </div>
+            <div className="be-box hi">
+              <div className="k">Estimated monthly revenue</div>
+              <div className="v">{RM(summary.monthlyRevenue)}</div>
+              <div className="d">{Math.round(summary.monthlyBoxes)} court-hours · {RM(summary.monthlyRevenue*12)} / yr</div>
+            </div>
+          </div>
+
+          <Expandable label="Show monthly rollup math" summary={RM(summary.monthlyRevenue)}>
+            <div className="formula">
+              {'weekday day  '}<span className="hl">{RM(wd.revenue)}</span>{' × '}<span className="hl">{cal.weekdayDays}</span>{' weekdays  = '}<span className="hl">{RM(wd.revenue*cal.weekdayDays)}</span>{'\n'}
+              {'weekend day  '}<span className="hl">{RM(we.revenue)}</span>{' × '}<span className="hl">{cal.weekendDays}</span>{' weekend  = '}<span className="hl">{RM(we.revenue*cal.weekendDays)}</span>{'\n'}
+              {'──────────────────────────────────────────'}{'\n'}
+              {'= estimated monthly revenue            '}<span className="g">{RM(summary.monthlyRevenue)}</span>
+            </div>
+          </Expandable>
+
+          <div className="bk-note">
+            <b>Implied utilization</b> from this plan — what your painted pattern works out to as a
+            % of theoretical capacity. Read these off and type them into the <b>Utilization</b> section,
+            or hit the button below to apply them automatically (per-court-type), which makes the main
+            P&amp;L's court revenue match this plan's monthly figure exactly.
+          </div>
+          <table className="math">
+            <thead><tr><th>Band</th><th>Futsal</th><th>Pickleball</th><th>Combined</th></tr></thead>
+            <tbody>
+              {BAND_KEYS.map(key => {
+                const [dt, tb] = key.split('-');
+                const im = summary.implied[key];
+                return (
+                  <tr key={key}>
+                    <td>{L[dt]} · {tb==='day'?'Day':'Night'}</td>
+                    <td>{PCT(im.futsal)}</td>
+                    <td>{PCT(im.pickleball)}</td>
+                    <td className="v">{PCT(im.combined)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <button className="bk-apply" onClick={applyImplied}>→ Apply implied utilization to the sliders</button>
+          {applied && (
+            <div className="bk-applied">
+              ✓ Applied. The <b>Utilization</b> section is now in <b>Detailed mode</b> with per-court-type
+              overrides mirroring this plan — scroll up to review or tweak. The main P&amp;L court revenue now
+              equals this plan's estimate ({RM(summary.monthlyRevenue)}).
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   APP
+   ========================================================================== */
+function App(){
+  const [state, setState] = useState(defaults);
+  const [hydrated, setHydrated] = useState(false);
+
+  // load saved state once
+  useEffect(() => {
+    let alive = true;
+    Store.load().then(loaded => {
+      if (alive && loaded) setState(normalize(loaded));
+      setHydrated(true);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  // persist after hydration (so defaults don't clobber saved data on first paint)
+  useEffect(() => { if (hydrated) Store.save(state); }, [state, hydrated]);
+
+  const set = (patch) => setState(s => ({ ...s, ...patch }));
+
+  const reset = () => {
+    if (window.confirm('Reset every input to the default example model? This clears your saved figures.')){
+      setState(defaults());
+    }
+  };
+
+  // ----- derived model (calls the pure engine) -----
+  const cal       = useMemo(() => getCalendarBreakdown(state.month, state.year), [state.month, state.year]);
+  const courtRev  = useMemo(() => getCourtRevenue(state.prices, state.util, cal), [state.prices, state.util, cal]);
+  const addRev    = useMemo(() => getAdditionalRevenue(state.additionalRevenue), [state.additionalRevenue]);
+  const totalRevenue = courtRev.total + addRev.total;
+  const totalBookedHours = courtRev.totalBookedHours;
+
+  const fixed     = useMemo(() => getFixedExpenses(state.fixedExpenses), [state.fixedExpenses]);
+  const variable  = useMemo(() => getVariableExpenses(state.variableExpenses, totalBookedHours, totalRevenue),
+                            [state.variableExpenses, totalBookedHours, totalRevenue]);
+  const totalExpenses = fixed.total + variable.total;
+  const profit    = getProfit(totalRevenue, totalExpenses);
+
+  const be        = useMemo(() => getBreakevenUtilization(state.prices, fixed.total, state.variableExpenses, addRev.total, cal),
+                            [state.prices, fixed.total, state.variableExpenses, addRev.total, cal]);
+  const beRevenue = getBreakevenRevenue(be);
+
+  // current "effective" utilization = booked hours / theoretical-max hours (comparable to breakeven u)
+  const currentUtilFrac = be.H1 > 0 ? totalBookedHours / be.H1 : 0;
+
+  // booking planner rollup (standalone — uses prices + calendar only, not the sliders)
+  const bookingSummary = useMemo(() => getBookingSummary(state.booking, state.prices, cal),
+                                 [state.booking, state.prices, cal]);
+
+  return (
+    <div className="wrap">
+      <header className="top">
+        <div>
+          <h1>Sports Hall — Business Evaluation</h1>
+          <div className="sub">
+            Financial model for {COURTS.futsal} futsal + {COURTS.pickleball} pickleball courts, revenue from public hourly bookings.
+            Every figure is an assumption you control. Open 06:00–02:00 daily (20 h/day). All figures persist on this device.
+          </div>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:10}}>
+          <ExportBar month={state.month} year={state.year} />
+          <PeriodBar month={state.month} year={state.year} cal={cal}
+            onMonth={m => set({month:m})} onYear={y => set({year:y})} />
+        </div>
+      </header>
+
+      <div className="columns">
+        <ExpensePanel state={state} set={set} fixed={fixed} variable={variable}
+          totalBookedHours={totalBookedHours} totalRevenue={totalRevenue} />
+        <RevenuePanel state={state} set={set} courtRev={courtRev} addRev={addRev} cal={cal} />
+        <ProfitPanel totalRevenue={totalRevenue} totalExpenses={totalExpenses} profit={profit}
+          be={be} beRevenue={beRevenue} courtRev={courtRev} addRev={addRev}
+          fixed={fixed} variable={variable} cal={cal} currentUtilFrac={currentUtilFrac} />
+      </div>
+
+      <BookingGridSection state={state} set={set} prices={state.prices} cal={cal} summary={bookingSummary} />
+
+      <div className="foot">
+        <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:10,alignItems:'center'}}>
+          <span>
+            <b>Model assumptions:</b> booked = paid (no no-shows/cancellations) · prices tax-inclusive (no tax line) ·
+            additional revenue is flat (not scaled by utilization) · annual = flat ×12 (no seasonality).
+          </span>
+          <button className="btn danger no-export" onClick={reset}>↺ Reset to defaults</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   SELF-TESTS (console) — sanity-check the engine on load.
+   ========================================================================== */
+(function runSelfTests(){
+  try {
+    const assert = (cond, msg) => { if (!cond) console.error('SELF-TEST FAIL:', msg); };
+    // June 2026: 30 days, 22 weekdays, 8 weekend days
+    const c = getCalendarBreakdown(6, 2026);
+    assert(c.totalDays === 30, 'June 2026 totalDays=30, got ' + c.totalDays);
+    assert(c.weekdayDays + c.weekendDays === 30, 'days sum');
+    // cell hours: weekday day = 11 × weekdayDays
+    assert(getCellHours('weekday','day',c) === 11 * c.weekdayDays, 'cell hours weekday/day');
+    // booked hours simple 100% futsal weekday day = 2 × (11×wd) × 1
+    const u100 = { mode:'simple', global:1 };
+    assert(getCellBookedHours('futsal','weekday','day',u100,c) === 2*11*c.weekdayDays, 'booked 100%');
+    // breakeven: profit at breakeven u should be ~0
+    const d = defaults();
+    const be = getBreakevenUtilization(d.prices, getFixedExpenses(d.fixedExpenses).total,
+                 d.variableExpenses, getAdditionalRevenue(d.additionalRevenue).total, c);
+    if (be.feasible && isFinite(be.u)){
+      const u = { mode:'simple', global: be.u };
+      const cr = getCourtRevenue(d.prices, u, c);
+      const tr = cr.total + getAdditionalRevenue(d.additionalRevenue).total;
+      const ve = getVariableExpenses(d.variableExpenses, cr.totalBookedHours, tr).total;
+      const te = getFixedExpenses(d.fixedExpenses).total + ve;
+      assert(Math.abs(tr - te) < 1, 'profit≈0 at breakeven u, residual=' + (tr-te).toFixed(4));
+    }
+    // booking planner: monthly = weekday/day rev × weekdays + weekend/day rev × weekend days
+    const bs = getBookingSummary(d.booking, d.prices, c);
+    const expectMonthly = bs.dayTotals.weekday.revenue * c.weekdayDays + bs.dayTotals.weekend.revenue * c.weekendDays;
+    assert(Math.abs(bs.monthlyRevenue - expectMonthly) < 0.001, 'booking monthly rollup');
+    // implied utilization never exceeds 100%
+    for (const k of BAND_KEYS) assert(bs.implied[k].combined <= 1.0001, 'implied util <= 100% for ' + k);
+    console.log('Sports Hall model self-tests passed.', c, 'breakeven u =', isFinite(be.u)?(be.u*100).toFixed(1)+'%':'n/a',
+                '· booking monthly =', Math.round(bs.monthlyRevenue));
+  } catch(e){ console.error('Self-test error', e); }
+})();
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+<!-- Bootstrap: compile the JSX above with the classic runtime, then run it. -->
+<script>
+(function(){
+  function fail(msg){
+    var r = document.getElementById('root');
+    if (r) r.innerHTML = '<pre style="color:#f85149;padding:24px;white-space:pre-wrap;'
+      + 'font-family:monospace;font-size:13px">Failed to start dashboard:\n\n' + msg + '</pre>';
+  }
+  if (typeof Babel === 'undefined' || typeof React === 'undefined' || typeof ReactDOM === 'undefined'){
+    return fail('A required library (React, ReactDOM or Babel) did not load from the vendor/ folder.');
+  }
+  try {
+    var src = document.getElementById('appsrc').textContent;
+    var out = Babel.transform(src, { presets: [['react', { runtime: 'classic' }]] });
+    (0, eval)(out.code);
+  } catch(e){ console.error(e); fail((e && e.stack) || String(e)); }
+})();
+</script>
+</body>
+</html>
